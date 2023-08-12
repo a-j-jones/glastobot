@@ -1,3 +1,4 @@
+import asyncio
 import math
 import threading
 import time
@@ -5,7 +6,7 @@ import time
 import screeninfo
 import win32gui
 import win32ui
-from selenium.webdriver import Chrome
+from pyppeteer import launch
 
 
 def get_display_scaling():
@@ -39,17 +40,31 @@ def threaded_execution(elements, function):
 
 
 class GlastoManager:
-	def __init__(self, driver_count=1):
+	def __init__(self, entry_url, driver_count=1):
 		self.drivers = []
-		threaded_execution(range(driver_count), lambda x: self.drivers.append(Glasto()))
+		self.driver_count = driver_count
 		self.form_grid()
+		self.url = entry_url
+		self.viewed_pages = {}
+		self.searching = None
 
-	def start(self, url):
+	async def get_drivers(self) -> None:
+		self.drivers = await asyncio.gather(*[launch(headless=False) for _ in range(self.driver_count)])
+
+	async def start(self, refresh_time=3):
+		self.searching = True
+
 		for driver in self.drivers:
-			driver.set_entry_url(url)
-			driver.auto_run()
+			driver.get(self.url)
 
-	def set_driver_position(self, index, driver):
+		while self.searching:
+			for driver in self.drivers:
+				self.check_page(driver.current_url)
+				driver.refresh()
+
+			time.sleep(refresh_time)
+
+	async def set_driver_position(self, index, driver):
 		monitor = screeninfo.get_monitors()[0]
 
 		grid_width = math.ceil(math.sqrt(len(self.drivers)))
@@ -70,38 +85,27 @@ class GlastoManager:
 			self.set_driver_position
 		)
 
-	def quit(self):
+	async def quit(self):
 		threaded_execution(self.drivers, lambda x: x.quit())
 
-
-class Glasto(Chrome):
-	def __init__(self, *args, **kwargs):
-		super(Glasto, self).__init__(*args, **kwargs)
-		self.url = None
-		self.searching = False
-		self.viewed_pages = {}
-
-	def set_entry_url(self, url):
-		self.url = url
-
-	def check_page(self, url):
+	async 	def check_page(self, url):
 		if url not in self.viewed_pages:
 			self.viewed_pages[url] = True
 			print(f"Page: {url}")
 
-	def auto_run(self, refresh_time=3):
-		self.get(self.url)
-		self.searching = True
-		self.check_page(self.url)
 
-		while self.searching:
-			self.refresh()
-			time.sleep(refresh_time)
-			self.check_page(self.current_url)
+async def main():
+	manager = GlastoManager(
+		entry_url="https://www.glastonburyfestivals.co.uk/information/tickets/",
+		driver_count=4
+	)
+	await manager.get_drivers()
+	manager.form_grid()
+	# manager.start(refresh_time=3)
+	# manager.quit()
+
+	print("All done!")
 
 
 if __name__ == '__main__':
-	manager = GlastoManager(driver_count=9)
-	manager.form_grid()
-	manager.quit()
-	print("All done!")
+	asyncio.run(main())
