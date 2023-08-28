@@ -10,8 +10,42 @@ import win32ui
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 
+# Global constants
 BASE_COUNT = "4"
 BASE_URL = "https://www.glastonburyfestivals.co.uk/information/tickets/"
+PROXY = ""  # No proxy was provided in original code. Should be filled if used.
+
+
+def kill_chromedriver():
+    """Kill all running chromedriver processes."""
+    os.system('taskkill /F /IM chromedriver.exe /T')
+
+
+def get_display_scaling() -> float:
+    """Get the display scaling for the current monitor."""
+    hdc = win32gui.GetDC(0)
+    dpi = win32ui.GetDeviceCaps(hdc, 88)
+    win32gui.ReleaseDC(0, hdc)
+    return dpi / 96
+
+
+def threaded_execution(elements, function):
+    """
+    Execute a function in separate threads for each element.
+
+    Args:
+    - elements (List): List of elements.
+    - function (callable): Function to execute in threads.
+    """
+    threads = []
+    for element in elements:
+        arguments = element if type(element) is tuple else (element,)
+        t = threading.Thread(target=function, args=arguments)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
 
 
 class GlastoGUI(tk.Tk):
@@ -168,36 +202,6 @@ class GlastoGUI(tk.Tk):
                     print(f"Error in thread {self.execution_thread.name}: {e}")
 
         super(GlastoGUI, self).destroy()
-
-
-def get_display_scaling():
-    hdc = win32gui.GetDC(0)
-    dpi = win32ui.GetDeviceCaps(hdc, 88)
-    win32gui.ReleaseDC(0, hdc)
-    return dpi / 96
-
-
-def threaded_execution(elements, function):
-    threads = []
-
-    # Initialize driver objects in separate threads
-    for element in elements:
-        if type(element) is tuple:
-            arguments = element
-        else:
-            arguments = (element,)
-
-        t = threading.Thread(target=function, args=arguments)
-        t.start()
-        threads.append(t)
-
-    # Ensure all threads have completed before proceeding
-    for t in threads:
-        while t.is_alive():
-            try:
-                t.join(timeout=1)
-            except Exception as e:
-                print(f"Error in thread {t.name}: {e}")
 
 
 class GlastoManager:
