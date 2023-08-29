@@ -3,6 +3,9 @@ import os
 import threading
 import time
 import tkinter as tk
+from typing import List, Optional, Dict, Iterable
+from queue import Queue, Empty
+import logging
 
 import screeninfo
 import win32gui
@@ -10,15 +13,24 @@ import win32ui
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 
-# Global constants
-base_count = "4"
-base_url = "https://www.glastonburyfestivals.co.uk/information/tickets/"
-PROXY = ""  # No proxy was provided in original code. Should be filled if used.
+# Global constants:
+PROXY = ""
+
+# Global variables:
+update_queue = Queue()
+
+# Logging setup:
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler = logging.FileHandler('glastobot.log', mode='w')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
-def kill_chromedriver():
+def kill_chromedriver() -> None:
     """Kill all running chromedriver processes."""
-    os.system('taskkill /F /IM chromedriver.exe /T')
+    os.system('taskkill /F /IM chromedriver.exe /T 2>nul')
 
 
 def get_display_scaling() -> float:
@@ -29,53 +41,58 @@ def get_display_scaling() -> float:
     return dpi / 96
 
 
-def threaded_execution(elements, function):
+def threaded_execution(elements: Iterable, function: callable, debug_message="") -> None:
     """
     Execute a function in separate threads for each element.
 
-    Args:
-    - elements (List): List of elements.
-    - function (callable): Function to execute in threads.
+    :param elements (Iterable): List of elements
+    :param function (callable): Function to execute in threads
+    :param debug_message (str): Optional debug message to print before starting each thread
     """
     threads = []
+    debug_message = f"{debug_message} - " if debug_message else ""
     for element in elements:
+        logger.debug(f"{debug_message}Starting thread for {element}")
         arguments = element if type(element) is tuple else (element,)
-        t = threading.Thread(target=function, args=arguments)
+        t = threading.Thread(target=function, args=arguments, daemon=True)
         t.start()
         threads.append(t)
 
     for t in threads:
         t.join()
+        logger.debug(f"Thread {t.name} finished.")
 
 
 class GlastoGUI(tk.Tk):
-    base_count = "4"
-    base_url = "https://www.glastonburyfestivals.co.uk/information/tickets/"
-    x_pad = 10
-    y_pad = 2
+    base_count: str = "4"
+    base_url: str = "https://www.glastonburyfestivals.co.uk/information/tickets/"
+    x_pad: int = 10
+    y_pad: int = 2
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(GlastoGUI, self).__init__()
         self._setup_attributes()
         self._setup_tkinter_window()
         self._create_controls()
         self.mainloop()
 
-    def _setup_attributes(self):
+    def _setup_attributes(self) -> None:
         """Initializes class attributes."""
-        self.manager = None
-        self.execution_thread = None
-        self.url_thread = None
-        self.driver_info = []
+        self.manager: Optional[GlastoManager] = None
+        self.execution_thread: Optional[threading.Thread] = None
+        self.url_thread: Optional[threading.Thread] = None
+        self.event: threading.Event = threading.Event()
+        self.driver_info: List[dict] = []
         self.checkboxes = []
         self.checkvars = []
 
-    def _setup_tkinter_window(self):
+    def _setup_tkinter_window(self) -> None:
         """Configures the main tkinter window."""
         self.title("GlastoBot")
         self.wm_attributes("-topmost", 1)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def _create_controls(self):
+    def _create_controls(self) -> None:
         """Creates and sets up GUI controls."""
         # URL entry and controls
         self._create_url_controls()
@@ -83,7 +100,7 @@ class GlastoGUI(tk.Tk):
         # Checkbox area for URLs
         self._create_checkbox_area()
 
-    def _create_url_controls(self):
+    def _create_url_controls(self) -> None:
         """Creates URL entry and related controls."""
         self.url_label = tk.Label(self, text="URL:")
         self.url_label.grid(row=0, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W")
@@ -101,7 +118,7 @@ class GlastoGUI(tk.Tk):
         self.start_button = tk.Button(self, text="Start", command=self.start)
         self.start_button.grid(row=0, column=5, rowspan=2, padx=self.x_pad, pady=self.y_pad, sticky="W")
 
-    def _create_checkbox_area(self):
+    def _create_checkbox_area(self) -> None:
         """Creates area with checkboxes to pause/resume browsing."""
         self.checkbox_label = tk.Label(self, text="If checked, the following URLs will pause the browser:")
         self.checkbox_label.grid(row=0, column=6, padx=self.x_pad, pady=self.y_pad, sticky="W")
@@ -117,12 +134,16 @@ class GlastoGUI(tk.Tk):
         self.checkbox_canvas.create_window((0, 0), window=self.frame, anchor="nw")
         self.checkbox_canvas.bind('<Configure>', self._on_canvas_configure)
 
-    def _on_canvas_configure(self, event):
+    def _on_canvas_configure(self, event) -> None:
         """Updates the scroll region on configuration changes."""
         self.checkbox_canvas.configure(scrollregion=self.checkbox_canvas.bbox('all'))
 
-    def update_checkboxes(self, data):
-        """Updates checkboxes based on input data."""
+    def update_checkboxes(self, data: Dict) -> None:
+        """
+        Updates checkboxes based on input data.
+
+        :param data (Dict): Dictionary with checkbox names and values
+        """
         # Get latest value from existing checkboxes and update the data
         for i, checkbox in enumerate(self.checkboxes):
             data[checkbox.cget("text")] = bool(self.checkvars[i].get())
@@ -142,16 +163,23 @@ class GlastoGUI(tk.Tk):
             self.checkboxes.append(cb)
             self.checkvars.append(var)
 
-    def start_managers(self, driver_count, url):
-        """Starts the manager with specified driver count and URL."""
+    def start_managers(self, driver_count: int, url: str) -> None:
+        """
+        Starts the manager with specified driver count and URL.
+
+        :param driver_count (int): Number of drivers to start
+        :param url (str): URL to start the drivers with
+        """
+        logger.debug("Manager started")
         self.manager = GlastoManager(interface=self, driver_count=driver_count)
         self.manager.form_grid()
         self.manager.start(url)
-        self.manager.quit()
+        logger.debug("Manager stopped")
 
-    def monitor_urls(self):
+    def monitor_urls(self) -> None:
         """Monitors and updates URLs continuously."""
-        while True:
+        logger.debug("URL monitoring started")
+        while not self.event.is_set():  # Check for the stop event here
             if self.manager:
                 for index, driver in enumerate(self.manager.drivers):
                     try:
@@ -168,7 +196,9 @@ class GlastoGUI(tk.Tk):
 
             time.sleep(1)
 
-    def start(self):
+        logger.debug("URL monitoring stopped")
+
+    def start(self) -> None:
         """Starts execution and URL monitoring."""
         driver_count = int(self.driver_count_entry.get())
         url = self.url_entry.get()
@@ -200,38 +230,83 @@ class GlastoGUI(tk.Tk):
         self.execution_thread = threading.Thread(target=self.start_managers, args=(driver_count, url))
         self.execution_thread.start()
 
-        self.url_thread = threading.Thread(target=self.monitor_urls)
-        self.url_thread.daemon = True
+        self.url_thread = threading.Thread(target=self.monitor_urls, daemon=True)
         self.url_thread.start()
 
+        self.check_for_updates()
+
+    def check_for_updates(self):
+        """Checks for updates in the update_queue and updates the GUI accordingly."""
+        try:
+            while True:  # Process all pending updates
+                driver_index, text = update_queue.get_nowait()
+                self.driver_info[driver_index]["label"].config(text=text)
+        except Empty:
+            pass
+        self.after(100, self.check_for_updates)  # Check again after 100ms
+
+    def on_closing(self) -> None:
+        """Handles the event when the window is closing."""
+        # This will set the event flag and signal the threads to stop
+        self.event.set()
+
+        if self.manager:
+            self.manager.quit()
+            self.execution_thread.join()
+            logger.debug(f"Thread {self.execution_thread.name} finished.")
+
+        # Give threads a bit of time to gracefully exit
+        self.destroy()
 
 
 class GlastoManager:
-    def __init__(self, interface, driver_count=1):
+    def __init__(self, interface: GlastoGUI, driver_count: int = 1) -> None:
+        """
+        Manager class for Glasto. Handles the creation and management of drivers.
+
+        :param interface (GlastoGUI): The GUI interface to update
+        :param driver_count (int): Number of drivers to start
+        """
         self.drivers = []
+        self.threads = []
+        self.stop_event = threading.Event()  # Using an event for clean thread termination
+
         chrome_options = Options()
         chrome_options.add_argument(f"--proxy-server={PROXY}")
-        threaded_execution(range(driver_count), lambda x: self.drivers.append(Glasto(self, options=chrome_options)))
+
+        logger.debug("Launching drivers")
+        threaded_execution(
+            range(driver_count),
+            lambda x: self.drivers.append(Glasto(self, options=chrome_options)),
+            debug_message="Driver launch"
+        )
         self.form_grid()
         self.desired_page = {}
         self.interface = interface
 
-    def start(self, url, refresh_time=3):
-        threads = []
+    def start(self, url: str, refresh_time: int = 3) -> None:
+        """
+        Starts the drivers with the specified URL.
+        :param url (str): URL to start the drivers with
+        :param refresh_time (int): Time to wait between refreshes
+        """
+
+
+        logger.debug("Starting drivers")
         for driver in self.drivers:
             driver.set_entry_url(url)
             t = threading.Thread(target=driver.auto_run, args=(refresh_time,))
             t.start()
-            threads.append(t)
+            self.threads.append(t)
 
-        for t in threads:
-            while t.is_alive():
-                try:
-                    t.join(timeout=1)
-                except Exception as e:
-                    print(f"Error in thread {t.name}: {e}")
+    def set_driver_position(self, index: int, driver: 'Glasto') -> None:
+        """
+        Sets the position of the driver window on the screen.
 
-    def set_driver_position(self, index, driver):
+        :param index: The index of the driver in the list
+        :param driver: Driver object
+        """
+
         monitor = screeninfo.get_monitors()[0]
 
         grid_width = math.ceil(math.sqrt(len(self.drivers)))
@@ -246,24 +321,29 @@ class GlastoManager:
         driver.set_window_position(x, y)
         driver.set_window_size(driver_width, driver_height)
 
-    def form_grid(self):
+    def form_grid(self) -> None:
+        """Forms a grid of drivers on the screen."""
         threaded_execution(
             enumerate(self.drivers),
             self.set_driver_position
         )
 
-    def resume_searching(self, driver_index):
+    def resume_searching(self, driver_index: int) -> None:
+        """Resumes the driver's searching."""
         self.drivers[driver_index].searching = True
-        self.interface.driver_info[driver_index]["label"].config(text=f"Driver {driver_index + 1} - searching")
+        update_queue.put((driver_index, f"Driver {driver_index + 1} - searching"))
 
-    def pause_searching(self, driver_index):
+    def pause_searching(self, driver_index: int) -> None:
+        """Pauses the driver's searching."""
         self.drivers[driver_index].searching = False
-        self.interface.driver_info[driver_index]["label"].config(text=f"Driver {driver_index + 1} - paused")
+        update_queue.put((driver_index, f"Driver {driver_index + 1} - paused"))
 
-    def set_focus(self, driver_index):
+    def set_focus(self, driver_index: int) -> None:
+        """Sets the focus to the driver's window."""
         self.drivers[driver_index].set_focus()
 
-    def check_page(self, driver):
+    def check_page(self, driver: 'Glasto') -> None:
+        """Checks if the driver has reached the desired page."""
         url = driver.current_url
         driver_index = self.drivers.index(driver)
 
@@ -271,45 +351,57 @@ class GlastoManager:
             self.pause_searching(driver_index)
             self.desired_page[url] = True
 
-    def quit(self):
-        for driver in self.drivers:
-            driver.quit_flag = True
+    def quit(self) -> None:
+        """Quits all drivers."""
+        self.stop_event.set()  # Setting the stop event which signals all threads to terminate
 
 
 class Glasto(Chrome):
-    def __init__(self, manager, **kwargs):
+    def __init__(self, manager: GlastoManager, **kwargs) -> None:
+        """
+        Glasto driver class. Inherits from Chrome.
+        :param manager:
+        :param kwargs:
+        """
+
+        logger.debug(f"Initializing driver - {id(self)}")
         super(Glasto, self).__init__(**kwargs)
         self.url = None
         self.searching = False
         self.manager = manager
-        self.quit_flag = False
+        logger.debug(f"Driver initialized - {id(self)}")
 
-    def set_entry_url(self, url):
+    def set_entry_url(self, url) -> None:
+        """Sets the URL to start the driver with."""
         self.url = url
 
-    def set_focus(self):
+    def set_focus(self) -> None:
+        """Sets the focus to the driver's window."""
         self.manager.form_grid()
         self.maximize_window()
         self.switch_to.window(self.current_window_handle)
 
-    def auto_run(self, refresh_time=3):
+    def auto_run(self, refresh_time=3) -> None:
+        """
+        Starts the driver and automatically refreshes the page.
+        :param refresh_time:
+        """
         self.get(self.url)
         self.manager.check_page(self)
         self.searching = True
 
-        while True:
-            if self.quit_flag:
-                self.quit()
-                break
-            elif self.searching:
+        while not self.manager.stop_event.is_set():  # Check for the stop event
+            if self.searching:
                 self.refresh()
                 time.sleep(refresh_time)
                 self.manager.check_page(self)
             else:
                 time.sleep(refresh_time)
 
+        self.quit()  # Clean up after receiving the stop signal
+
 
 if __name__ == '__main__':
-    os.system('taskkill /F /IM chromedriver.exe /T')
+    logger.debug("Starting GlastoBot")
+    kill_chromedriver()
     gui = GlastoGUI()
-    print("All done!")
