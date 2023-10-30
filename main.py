@@ -1,11 +1,12 @@
+import logging
 import math
 import os
 import threading
 import time
 import tkinter as tk
-from typing import List, Optional, Dict, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
-import logging
+from typing import List, Optional, Dict, Iterable
 
 import screeninfo
 import win32gui
@@ -42,6 +43,22 @@ def get_display_scaling() -> float:
 
 
 def threaded_execution(elements: Iterable, function: callable, debug_message="") -> None:
+    futures = []
+    debug_message = f"{debug_message} - " if debug_message else ""
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        for element in elements:
+            logger.debug(f"{debug_message}Submitted {element} to thread pool.")
+            arguments = element if type(element) is tuple else (element,)
+            futures.append(executor.submit(function, *arguments))
+
+    for future in futures:
+        if future.exception():
+            logger.error(f"Error in thread: {future.exception()}")
+        else:
+            logger.debug(f"{debug_message}Thread finished.")
+
+
+def threaded_execution_old(elements: Iterable, function: callable, debug_message="") -> None:
     """
     Execute a function in separate threads for each element.
 
@@ -172,7 +189,6 @@ class GlastoGUI(tk.Tk):
         """
         logger.debug("Manager started")
         self.manager = GlastoManager(interface=self, driver_count=driver_count)
-        self.manager.form_grid()
         self.manager.start(url)
         logger.debug("Manager stopped")
 
@@ -291,7 +307,6 @@ class GlastoManager:
         :param refresh_time (int): Time to wait between refreshes
         """
 
-
         logger.debug("Starting drivers")
         for driver in self.drivers:
             driver.set_entry_url(url)
@@ -318,6 +333,7 @@ class GlastoManager:
 
         x = (index % grid_width) * driver_width
         y = (index // grid_width) * driver_height
+
         driver.set_window_position(x, y)
         driver.set_window_size(driver_width, driver_height)
 
