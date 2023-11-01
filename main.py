@@ -189,6 +189,7 @@ class GlastoGUI(tk.Tk):
         """
         logger.debug("Manager started")
         self.manager = GlastoManager(interface=self, driver_count=driver_count)
+        self.start_button.config(text="Restart all", command=self.manager.resume_all)
         self.manager.start(url)
         logger.debug("Manager stopped")
 
@@ -346,6 +347,12 @@ class GlastoManager:
             enumerate(self.drivers),
             self.set_driver_position
         )
+
+    def resume_all(self) -> None:
+        """Resumes all drivers."""
+        for driver_index, driver in enumerate(self.drivers):
+            driver.searching = True
+            update_queue.put((driver_index, f"Driver {driver_index + 1} - searching"))
 
     def resume_searching(self, driver_index: int) -> None:
         """Resumes the driver's searching."""
