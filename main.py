@@ -5,8 +5,8 @@ import threading
 import time
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
-from queue import Queue, Empty
-from typing import List, Optional, Dict, Iterable
+from queue import Empty, Queue
+from typing import Dict, Iterable, List, Optional
 
 import screeninfo
 import win32gui
@@ -15,7 +15,7 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 
 # Global constants:
-PROXY = ""
+PROXY = None
 
 # Global variables:
 update_queue = Queue()
@@ -232,12 +232,14 @@ class GlastoGUI(tk.Tk):
             open_button = tk.Button(self, text=f"Open", command=lambda d=driver: self.manager.set_focus(d))
             open_button.grid(row=driver + 3, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
 
-            self.driver_info.append({
-                "label": label,
-                "resume_button": resume_button,
-                "open_button": open_button,
-                "url": url_label  # Renamed this from 'url' to 'url_label' for clarity
-            })
+            self.driver_info.append(
+                {
+                    "label": label,
+                    "resume_button": resume_button,
+                    "open_button": open_button,
+                    "url": url_label  # Renamed this from 'url' to 'url_label' for clarity
+                }
+            )
 
         # Dynamic window geometry setup, if required
         self.geometry("")
@@ -288,7 +290,8 @@ class GlastoManager:
         self.stop_event = threading.Event()  # Using an event for clean thread termination
 
         chrome_options = Options()
-        chrome_options.add_argument(f"--proxy-server={PROXY}")
+        if PROXY:
+            chrome_options.add_argument(f"--proxy-server={PROXY}")
 
         logger.debug("Launching drivers")
         threaded_execution(
