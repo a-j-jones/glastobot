@@ -89,19 +89,17 @@ class GlastoManager:
 
     def resume_all(self) -> None:
         """Resumes all drivers."""
-        for driver_index, driver in enumerate(self.drivers):
-            driver.searching = True
-            update_queue.put((driver_index, f"Driver {driver_index + 1} - searching"))
+        for driver_index in range(len(self.drivers)):
+            self.resume_searching(driver_index)
 
     def pause_all(self) -> None:
         """Resumes all drivers."""
-        for driver_index, driver in enumerate(self.drivers):
-            driver.pause()
-            update_queue.put((driver_index, f"Driver {driver_index + 1} - paused"))
+        for driver_index in range(len(self.drivers)):
+            self.pause_searching(driver_index)
 
     def resume_searching(self, driver_index: int) -> None:
         """Resumes the driver's searching."""
-        self.drivers[driver_index].searching = True
+        self.drivers[driver_index].resume()
         update_queue.put((driver_index, f"Driver {driver_index + 1} - searching"))
 
     def pause_searching(self, driver_index: int) -> None:
@@ -146,6 +144,10 @@ class Glasto(Chrome):
     def pause(self):
         """Pauses the driver's searching."""
         self.searching = False
+
+    def resume(self):
+        """Resumes the driver's searching."""
+        self.searching = True
 
     def set_entry_url(self, url) -> None:
         """Sets the URL to start the driver with."""
