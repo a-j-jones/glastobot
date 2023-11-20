@@ -66,7 +66,7 @@ class GlastoGUI(tk.Tk):
         self.driver_count_entry.insert(0, self.base_count)
 
         self.start_button = tk.Button(self, text="Start", command=self.start)
-        self.start_button.grid(row=0, column=5, rowspan=2, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.start_button.grid(row=0, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
 
     def _create_checkbox_area(self) -> None:
         """Creates area with checkboxes to pause/resume browsing."""
@@ -124,7 +124,7 @@ class GlastoGUI(tk.Tk):
         self.manager = GlastoManager(interface=self, driver_count=driver_count)
         self.start_button.config(text="Restart all", command=self.manager.resume_all)
         self.pause_button = tk.Button(self, text="Pause all", command=self.manager.pause_all)
-        self.pause_button.grid(row=0, column=4, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.pause_button.grid(row=1, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
 
         self.manager.start(url)
         logger.debug("Manager stopped")
