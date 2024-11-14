@@ -9,7 +9,7 @@ A bot for trying to get tickets to stuff, originally Glastonbury (probably won't
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/glastobot.git
+git clone https://github.com/a-j-jones/glastobot.git
 cd glastobot
 ```
 
