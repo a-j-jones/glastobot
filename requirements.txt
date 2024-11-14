@@ -1,3 +1,4 @@
 selenium
 screeninfo
 pywin32
+chromedriver-autoinstaller
