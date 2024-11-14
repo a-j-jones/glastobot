@@ -10,7 +10,7 @@ logger = setup_logger(logger)
 # Global constants:
 PROXY = None
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.debug("Starting GlastoBot")
     kill_chromedriver()
-    gui = GlastoGUI()
+    gui = GlastoGUI(base_url="")

@@ -15,11 +15,12 @@ logger = setup_logger(logger)
 
 class GlastoGUI(tk.Tk):
     base_count: str = "4"
-    base_url: str = "https://glastonbury.seetickets.com/"
+    base_url: str
     x_pad: int = 10
     y_pad: int = 2
 
-    def __init__(self) -> None:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
         super(GlastoGUI, self).__init__()
         self._setup_attributes()
         self._setup_tkinter_window()
@@ -53,25 +54,39 @@ class GlastoGUI(tk.Tk):
     def _create_url_controls(self) -> None:
         """Creates URL entry and related controls."""
         self.url_label = tk.Label(self, text="URL:")
-        self.url_label.grid(row=0, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.url_label.grid(
+            row=0, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
         self.url_entry = tk.Entry(self, width=55)
-        self.url_entry.grid(row=0, column=1, columnspan=3, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.url_entry.grid(
+            row=0, column=1, columnspan=3, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
         self.url_entry.insert(0, self.base_url)
 
         # Driver count selection (integer only) default 9
         self.driver_count_label = tk.Label(self, text="Driver Count:")
-        self.driver_count_label.grid(row=1, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.driver_count_label.grid(
+            row=1, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
         self.driver_count_entry = tk.Entry(self)
-        self.driver_count_entry.grid(row=1, column=1, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.driver_count_entry.grid(
+            row=1, column=1, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
         self.driver_count_entry.insert(0, self.base_count)
 
         self.start_button = tk.Button(self, text="Start", command=self.start)
-        self.start_button.grid(row=0, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.start_button.grid(
+            row=0, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
 
     def _create_checkbox_area(self) -> None:
         """Creates area with checkboxes to pause/resume browsing."""
-        self.checkbox_label = tk.Label(self, text="If checked, the following URLs will pause the browser:")
-        self.checkbox_label.grid(row=0, column=6, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.checkbox_label = tk.Label(
+            self, text="If checked, the following URLs will pause the browser:"
+        )
+        self.checkbox_label.grid(
+            row=0, column=6, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
 
         self.checkbox_canvas = tk.Canvas(self)
         self.checkbox_canvas.grid(row=1, column=6, rowspan=19, sticky="nsew")
@@ -82,11 +97,11 @@ class GlastoGUI(tk.Tk):
         self.checkbox_canvas.configure(yscrollcommand=self.scrollbar.set)
         self.frame = tk.Frame(self.checkbox_canvas)
         self.checkbox_canvas.create_window((0, 0), window=self.frame, anchor="nw")
-        self.checkbox_canvas.bind('<Configure>', self._on_canvas_configure)
+        self.checkbox_canvas.bind("<Configure>", self._on_canvas_configure)
 
     def _on_canvas_configure(self, event) -> None:
         """Updates the scroll region on configuration changes."""
-        self.checkbox_canvas.configure(scrollregion=self.checkbox_canvas.bbox('all'))
+        self.checkbox_canvas.configure(scrollregion=self.checkbox_canvas.bbox("all"))
 
     def update_checkboxes(self, data: Dict) -> None:
         """
@@ -123,8 +138,12 @@ class GlastoGUI(tk.Tk):
         logger.debug("Manager started")
         self.manager = GlastoManager(interface=self, driver_count=driver_count)
         self.start_button.config(text="Restart all", command=self.manager.resume_all)
-        self.pause_button = tk.Button(self, text="Pause all", command=self.manager.pause_all)
-        self.pause_button.grid(row=1, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
+        self.pause_button = tk.Button(
+            self, text="Pause all", command=self.manager.pause_all
+        )
+        self.pause_button.grid(
+            row=1, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W"
+        )
 
         self.manager.start(url)
         logger.debug("Manager stopped")
@@ -161,20 +180,39 @@ class GlastoGUI(tk.Tk):
 
         for driver in range(driver_count):
             label = tk.Label(self, text=f"Driver {driver + 1} - searching")
-            label.grid(row=driver + 3, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W")
+            label.grid(
+                row=driver + 3, column=0, padx=self.x_pad, pady=self.y_pad, sticky="W"
+            )
             url_label = tk.Label(self, text="")
-            url_label.grid(row=driver + 3, column=1, columnspan=3, padx=self.x_pad, pady=self.y_pad, sticky="W")
-            resume_button = tk.Button(self, text=f"Resume", command=lambda d=driver: self.manager.resume_searching(d))
-            resume_button.grid(row=driver + 3, column=4, padx=self.x_pad, pady=self.y_pad, sticky="W")
-            open_button = tk.Button(self, text=f"Open", command=lambda d=driver: self.manager.set_focus(d))
-            open_button.grid(row=driver + 3, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W")
+            url_label.grid(
+                row=driver + 3,
+                column=1,
+                columnspan=3,
+                padx=self.x_pad,
+                pady=self.y_pad,
+                sticky="W",
+            )
+            resume_button = tk.Button(
+                self,
+                text="Resume",
+                command=lambda d=driver: self.manager.resume_searching(d),
+            )
+            resume_button.grid(
+                row=driver + 3, column=4, padx=self.x_pad, pady=self.y_pad, sticky="W"
+            )
+            open_button = tk.Button(
+                self, text="Open", command=lambda d=driver: self.manager.set_focus(d)
+            )
+            open_button.grid(
+                row=driver + 3, column=5, padx=self.x_pad, pady=self.y_pad, sticky="W"
+            )
 
             self.driver_info.append(
                 {
                     "label": label,
                     "resume_button": resume_button,
                     "open_button": open_button,
-                    "url": url_label  # Renamed this from 'url' to 'url_label' for clarity
+                    "url": url_label,  # Renamed this from 'url' to 'url_label' for clarity
                 }
             )
 
@@ -182,7 +220,9 @@ class GlastoGUI(tk.Tk):
         self.geometry("")
 
         # Starting the execution and URL monitoring threads
-        self.execution_thread = threading.Thread(target=self.start_managers, args=(driver_count, url))
+        self.execution_thread = threading.Thread(
+            target=self.start_managers, args=(driver_count, url)
+        )
         self.execution_thread.start()
 
         self.url_thread = threading.Thread(target=self.monitor_urls, daemon=True)
